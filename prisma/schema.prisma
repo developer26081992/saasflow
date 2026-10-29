@@ -20,12 +20,17 @@ enum MemberRole {
 }
 
 model Organisation {
-  id                   String @id @default(cuid())
-  clerkOrgId           String @unique
+  id                   String  @id @default(cuid())
+  clerkOrgId           String  @unique
   name                 String
-  plan                 Plan   @default(FREE)
+  plan                 Plan    @default(FREE)
   stripeCustomerId     String? @unique
   stripeSubscriptionId String? @unique
+
+  // Stripe Checkout reservation fields
+  checkoutSessionId     String?   @unique
+  checkoutLockToken     String?   @unique
+  checkoutLockExpiresAt DateTime?
 
   memberships Membership[]
   projects    Project[]
@@ -35,8 +40,8 @@ model Organisation {
 }
 
 model User {
-  id          String @id @default(cuid())
-  clerkUserId String @unique
+  id          String  @id @default(cuid())
+  clerkUserId String  @unique
   email       String
   name        String?
 
@@ -47,13 +52,13 @@ model User {
 }
 
 model Membership {
-  id     String @id @default(cuid())
+  id     String     @id @default(cuid())
   userId String
   orgId  String
   role   MemberRole @default(MEMBER)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  org Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
@@ -62,7 +67,7 @@ model Membership {
 }
 
 model Project {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   name        String
   description String?
   orgId       String
