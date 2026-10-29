@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Organisation {
+  id                   String @id @default(cuid())
+  clerkOrgId           String @unique
+  name                 String
+  plan                 Plan   @default(FREE)
+  stripeCustomerId     String? @unique
+  stripeSubscriptionId String? @unique
+
+  memberships Membership[]
+  projects    Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id          String @id @default(cuid())
+  clerkUserId String @unique
+  email       String
+  name        String?
+
+  memberships Membership[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Membership {
+  id     String @id @default(cuid())
+  userId String
+  orgId  String
+  role   MemberRole @default(MEMBER)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, orgId])
+  @@index([orgId])
+}
+
+model Project {
+  id          String @id @default(cuid())
+  name        String
+  description String?
+  orgId       String
+
+  org Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+}
