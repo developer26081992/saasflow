@@ -10,6 +10,7 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   const secret = process.env.CLERK_WEBHOOK_SECRET;
 
+  // 1. Check webhook signing secret
   if (!secret) {
     console.error("CLERK_WEBHOOK_SECRET is missing");
 
@@ -19,6 +20,7 @@ export async function POST(req: Request) {
     );
   }
 
+  // 2. Read Svix headers
   const headerPayload = headers();
 
   const svixId = headerPayload.get("svix-id");
@@ -26,16 +28,20 @@ export async function POST(req: Request) {
   const svixSignature = headerPayload.get("svix-signature");
 
   if (!svixId || !svixTimestamp || !svixSignature) {
+    console.error("Missing required Svix headers");
+
     return NextResponse.json(
       { error: "Missing webhook headers" },
       { status: 400 }
     );
   }
 
+  // 3. Read original request body
   const payload = await req.text();
 
   let event: WebhookEvent;
 
+  // 4. Verify Clerk webhook signature
   try {
     const verifiedPayload: unknown = new Webhook(secret).verify(
       payload,
@@ -57,7 +63,19 @@ export async function POST(req: Request) {
 
     event = verifiedPayload as WebhookEvent;
   } catch (error) {
-    console.error("Webhook verification failed:", error);
+    // Safe diagnostics: never log secret values
+    console.error("Webhook verification failed:", {
+      message:
+        error instanceof Error
+          ? error.message
+          : String(error),
+      secretConfigured: Boolean(secret),
+      secretHasExpectedPrefix: secret.startsWith("whsec_"),
+      secretHasWhitespace: secret !== secret.trim(),
+      headersPresent: Boolean(
+        svixId && svixTimestamp && svixSignature
+      ),
+    });
 
     return NextResponse.json(
       { error: "Invalid webhook signature or payload" },
@@ -65,6 +83,7 @@ export async function POST(req: Request) {
     );
   }
 
+  // 5. Process verified Clerk events
   try {
     switch (event.type) {
       // Organisation created or updated
@@ -134,7 +153,7 @@ export async function POST(req: Request) {
         break;
       }
 
-      // Membership created or updated
+      // Organisation membership created or updated
       case "organizationMembership.created":
       case "organizationMembership.updated": {
         const membership = event.data;
@@ -195,7 +214,7 @@ export async function POST(req: Request) {
         break;
       }
 
-      // Membership deleted
+      // Organisation membership deleted
       case "organizationMembership.deleted": {
         const membership = event.data;
 
@@ -260,6 +279,8 @@ export async function POST(req: Request) {
         break;
       }
     }
+
+    console.log("Clerk webhook processed:", event.type);
 
     return NextResponse.json({
       success: true,
