@@ -1,4 +1,4 @@
-
+﻿
 "use client";
 
 import {
@@ -95,7 +95,7 @@ export default function MembersPage() {
         }
       }
     },
-    [organization?.id]
+    [organization]
   );
 
   useEffect(() => {
@@ -113,7 +113,9 @@ export default function MembersPage() {
     return () => controller.abort();
   }, [isLoaded, loadMembers]);
 
-  async function sendInvitation(event: FormEvent<HTMLFormElement>) {
+  async function sendInvitation(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     if (!organization || !isAdmin || inviting) return;
@@ -123,15 +125,18 @@ export default function MembersPage() {
     setInviteMessage("");
 
     try {
-      const response = await fetch("/api/members/invite", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: inviteEmail.trim(),
-        }),
-      });
+      const response = await fetch(
+        "/api/members/invite",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: inviteEmail.trim(),
+          }),
+        }
+      );
 
       const data = await response.json();
 
@@ -144,6 +149,7 @@ export default function MembersPage() {
       setInviteMessage(
         "Invitation sent successfully. The recipient can join after accepting it."
       );
+
       setInviteEmail("");
       setShowInviteForm(false);
     } catch (err) {
@@ -203,7 +209,8 @@ export default function MembersPage() {
             </h1>
 
             <p className="mt-3 text-slate-600">
-              View and manage your organisation's team.
+              View and manage your organisation&apos;s
+              team.
             </p>
           </div>
 
@@ -236,7 +243,10 @@ export default function MembersPage() {
 
         <div className="mt-8 grid gap-5 md:grid-cols-3">
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <Users className="text-blue-600" size={25} />
+            <Users
+              className="text-blue-600"
+              size={25}
+            />
             <p className="mt-4 text-sm text-slate-500">
               Total Members
             </p>
@@ -256,14 +266,18 @@ export default function MembersPage() {
             <p className="mt-2 text-3xl font-bold">
               {
                 members.filter(
-                  (member) => member.role === "org:admin"
+                  (member) =>
+                    member.role === "org:admin"
                 ).length
               }
             </p>
           </div>
 
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <Building2 className="text-blue-600" size={25} />
+            <Building2
+              className="text-blue-600"
+              size={25}
+            />
             <p className="mt-4 text-sm text-slate-500">
               Current Organisation
             </p>
@@ -335,10 +349,18 @@ export default function MembersPage() {
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b bg-slate-50 text-slate-600">
-                    <th className="px-4 py-4">Member</th>
-                    <th className="px-4 py-4">Email</th>
-                    <th className="px-4 py-4">Role</th>
-                    <th className="px-4 py-4">Joined</th>
+                    <th className="px-4 py-4">
+                      Member
+                    </th>
+                    <th className="px-4 py-4">
+                      Email
+                    </th>
+                    <th className="px-4 py-4">
+                      Role
+                    </th>
+                    <th className="px-4 py-4">
+                      Joined
+                    </th>
                   </tr>
                 </thead>
 
@@ -373,7 +395,9 @@ export default function MembersPage() {
                       <td className="px-4 py-4 text-slate-600">
                         <span className="inline-flex items-center gap-2">
                           <CalendarDays size={15} />
-                          {formatDate(member.joinedAt)}
+                          {formatDate(
+                            member.joinedAt
+                          )}
                         </span>
                       </td>
                     </tr>
@@ -395,7 +419,9 @@ export default function MembersPage() {
 
               <button
                 type="button"
-                onClick={() => setShowInviteForm(false)}
+                onClick={() =>
+                  setShowInviteForm(false)
+                }
                 aria-label="Close invitation form"
                 className="rounded-lg p-2 hover:bg-slate-100"
               >
@@ -405,7 +431,10 @@ export default function MembersPage() {
 
             <p className="mt-3 text-sm text-slate-600">
               Invite someone to join{" "}
-              <strong>{organization?.name}</strong> as a member.
+              <strong>
+                {organization?.name}
+              </strong>{" "}
+              as a member.
             </p>
 
             <form
@@ -433,7 +462,9 @@ export default function MembersPage() {
                     maxLength={254}
                     value={inviteEmail}
                     onChange={(event) =>
-                      setInviteEmail(event.target.value)
+                      setInviteEmail(
+                        event.target.value
+                      )
                     }
                     placeholder="person@example.com"
                     className="w-full rounded-xl border py-3 pl-10 pr-4"
@@ -444,7 +475,9 @@ export default function MembersPage() {
               <div className="flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowInviteForm(false)}
+                  onClick={() =>
+                    setShowInviteForm(false)
+                  }
                   className="rounded-xl border px-5 py-3"
                 >
                   Cancel
@@ -461,6 +494,7 @@ export default function MembersPage() {
                       className="animate-spin"
                     />
                   )}
+
                   {inviting
                     ? "Sending..."
                     : "Send Invitation"}
@@ -473,3 +507,4 @@ export default function MembersPage() {
     </main>
   );
 }
+
