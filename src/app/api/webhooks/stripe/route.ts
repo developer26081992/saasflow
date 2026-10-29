@@ -21,8 +21,7 @@ function getPlanFromPrice(
 
   if (
     priceId &&
-    priceId ===
-      process.env.STRIPE_ENTERPRISE_PRICE_ID
+    priceId === process.env.STRIPE_ENTERPRISE_PRICE_ID
   ) {
     return "ENTERPRISE";
   }
@@ -30,13 +29,18 @@ function getPlanFromPrice(
   return null;
 }
 
-async function syncSubscription(
+function getCustomerId(
   subscription: Stripe.Subscription
+): string {
+  return typeof subscription.customer === "string"
+    ? subscription.customer
+    : subscription.customer.id;
+}
+
+async function syncCustomerSubscriptions(
+  customerId: string
 ) {
-  const customerId =
-    typeof subscription.customer === "string"
-      ? subscription.customer
-      : subscription.customer.id;
+  const stripe = getStripe();
 
   const organisation =
     await prisma.organisation.findUnique({
@@ -46,36 +50,74 @@ async function syncSubscription(
     });
 
   if (!organisation) {
-    throw new Error(
-      "No organisation found for Stripe customer"
+    // Generic test events may reference customers
+    // that do not belong to a SaaSFlow organisation.
+    console.warn(
+      "Stripe webhook: unknown customer",
+      customerId
     );
+    return;
   }
 
-  const priceId =
-    subscription.items.data[0]?.price.id;
+  // Fetch the current state from Stripe instead
+  // of applying possibly outdated webhook data.
+  const subscriptions =
+    await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 100,
+    });
 
-  const paidPlan = getPlanFromPrice(priceId);
+  const eligibleSubscriptions =
+    subscriptions.data.filter(
+      (subscription) =>
+        subscription.status === "active" ||
+        subscription.status === "trialing"
+    );
 
-  const activeStatuses = [
-    "active",
-    "trialing",
-  ];
+  const paidSubscription =
+    eligibleSubscriptions.find((subscription) =>
+      subscription.items.data.some(
+        (item) =>
+          getPlanFromPrice(item.price.id) !== null
+      )
+    );
 
-  const isActive =
-    activeStatuses.includes(subscription.status);
+  if (paidSubscription) {
+    const priceId =
+      paidSubscription.items.data.find(
+        (item) =>
+          getPlanFromPrice(item.price.id) !== null
+      )?.price.id;
 
-  // Only recognised prices with active subscriptions
-  // receive paid features.
-  const plan =
-    isActive && paidPlan ? paidPlan : "FREE";
+    const plan = getPlanFromPrice(priceId);
 
+    if (!plan) {
+      return;
+    }
+
+    await prisma.organisation.update({
+      where: {
+        id: organisation.id,
+      },
+      data: {
+        plan,
+        stripeSubscriptionId: paidSubscription.id,
+      },
+    });
+
+    return;
+  }
+
+  // No active or trialing recognised subscription:
+  // return the organisation to its Free plan.
   await prisma.organisation.update({
     where: {
       id: organisation.id,
     },
     data: {
-      plan,
-      stripeSubscriptionId: subscription.id,
+      plan: "FREE",
+      stripeSubscriptionId: null,
     },
   });
 }
@@ -119,38 +161,20 @@ export async function POST(request: Request) {
   try {
     switch (event.type) {
       case "customer.subscription.created":
-      case "customer.subscription.updated": {
-        await syncSubscription(
-          event.data.object as Stripe.Subscription
-        );
-        break;
-      }
-
+      case "customer.subscription.updated":
       case "customer.subscription.deleted": {
         const subscription =
           event.data.object as Stripe.Subscription;
 
         const customerId =
-          typeof subscription.customer === "string"
-            ? subscription.customer
-            : subscription.customer.id;
+          getCustomerId(subscription);
 
-        await prisma.organisation.updateMany({
-          where: {
-            stripeCustomerId: customerId,
-            stripeSubscriptionId: subscription.id,
-          },
-          data: {
-            plan: "FREE",
-            stripeSubscriptionId: null,
-          },
-        });
+        await syncCustomerSubscriptions(customerId);
 
         break;
       }
 
       default:
-        // Other event types are not required yet.
         break;
     }
 

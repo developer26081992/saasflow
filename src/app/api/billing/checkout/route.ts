@@ -22,7 +22,11 @@ export async function POST(request: Request) {
   try {
     const body: unknown = await request.json();
 
-    if (!body || typeof body !== "object") {
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body)
+    ) {
       return NextResponse.json(
         { error: "Invalid request" },
         { status: 400 }
@@ -71,9 +75,35 @@ export async function POST(request: Request) {
       },
     });
 
-    // Reuse the organisation's Stripe customer if available.
+    // Check the subscription already stored in our database.
+    if (organisation.stripeSubscriptionId) {
+      const subscription = await stripe.subscriptions.retrieve(
+        organisation.stripeSubscriptionId
+      );
+
+      const blockingStatuses = [
+        "active",
+        "trialing",
+        "past_due",
+        "unpaid",
+        "incomplete",
+        "paused",
+      ];
+
+      if (blockingStatuses.includes(subscription.status)) {
+        return NextResponse.json(
+          {
+            error:
+              "This organisation already has a subscription. Manage the existing subscription before starting another.",
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     let customerId = organisation.stripeCustomerId;
 
+    // Reuse an existing Stripe customer whenever possible.
     if (!customerId) {
       const customer = await stripe.customers.create({
         name: organisation.name,
@@ -89,6 +119,39 @@ export async function POST(request: Request) {
         where: { id: organisation.id },
         data: { stripeCustomerId: customerId },
       });
+    }
+
+    // Also check Stripe directly in case webhook delivery
+    // has not yet updated the local subscription record.
+    const existingSubscriptions =
+      await stripe.subscriptions.list({
+        customer: customerId,
+        status: "all",
+        limit: 100,
+      });
+
+    const blockingStatuses = new Set([
+      "active",
+      "trialing",
+      "past_due",
+      "unpaid",
+      "incomplete",
+      "paused",
+    ]);
+
+    const existingSubscription =
+      existingSubscriptions.data.find((subscription) =>
+        blockingStatuses.has(subscription.status)
+      );
+
+    if (existingSubscription) {
+      return NextResponse.json(
+        {
+          error:
+            "An existing subscription was found for this organisation. Please manage it before subscribing again.",
+        },
+        { status: 409 }
+      );
     }
 
     const appUrl =
